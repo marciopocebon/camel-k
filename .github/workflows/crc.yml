@@ -1,0 +1,67 @@
+name: CRC
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  crc:
+    runs-on: macos-latest
+
+    steps:
+      - name: Info
+        run: |
+          df -h
+          sysctl hw.memsize
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup CRC
+        env:
+          PULL_SECRET: ${{ secrets.PULL_SECRET }}
+        run: |
+          /usr/bin/sudo /bin/launchctl disable system/com.apple.NetworkSharing
+
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-macos-amd64.tar.xz -o crc-macos-amd64.tar.xz
+          tar xf crc-macos-amd64.tar.xz
+          rm crc-macos-amd64.tar.xz
+          cd crc-macos-1.11.0-amd64/
+
+          #brew install hyperkit
+
+          ./crc config set memory 9216
+          ./crc config view
+
+          ./crc setup
+
+          #rm $HOME/.crc/bin/hyperkit
+          #ln -s /usr/local/bin/hyperkit $HOME/.crc/bin/hyperkit
+          #(cd $HOME/.crc/bin && sudo chown root:wheel hyperkit && sudo chmod u+s hyperkit && chmod +x hyperkit)
+
+          #sudo pkill hyperkit
+
+          echo $PULL_SECRET > pull.secret
+          ./crc start -p pull.secret --log-level debug
+          eval $(crc oc-env)
+          ./crc console --credentials
+
+          ./crc stop
+
+      - name: Build
+        run: |
+          # Compute registry parameters
+          echo "Build project"
+          make build-kamel
+          echo "Adding maven artifacts to the image context"
+          make PACKAGE_ARTIFACTS_STRATEGY=download package-artifacts
+          echo "Copying binary file to docker dir"
+          mkdir -p ./build/_output/bin
+          cp ./kamel ./build/_output/bin/
+          echo "Building the images"
+          export IMAGE=docker.io/apache/camel-k:$(make version)
+          docker build -t "${IMAGE}" -f build/Dockerfile .
+          # Make the Apache Snapshots or Apache Staging repository enabled by default
+          export KAMEL_INSTALL_MAVEN_REPOSITORIES=$(make get-staging-repo)
