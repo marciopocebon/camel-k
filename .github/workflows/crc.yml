@@ -44,7 +44,7 @@ jobs:
           #sudo pkill hyperkit
 
           echo $PULL_SECRET > pull.secret
-          ./crc start -p pull.secret --log-level debug
+          ./crc start -p pull.secret --log-level debug --vm-driver=virtualbox
           eval $(crc oc-env)
           ./crc console --credentials
 
