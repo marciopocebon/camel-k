@@ -34,7 +34,7 @@ jobs:
 
           ./crc setup
           
-          ./crc config set memory 8128
+          ./crc config set memory 8192
           ./crc config view
 
           #rm $HOME/.crc/bin/hyperkit
