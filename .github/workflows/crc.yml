@@ -25,17 +25,17 @@ jobs:
         run: |
           /usr/bin/sudo /bin/launchctl disable system/com.apple.NetworkSharing
 
-          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-macos-amd64.tar.xz -o crc-macos-amd64.tar.xz
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.2.0/crc-macos-amd64.tar.xz -o crc-macos-amd64.tar.xz
           tar xf crc-macos-amd64.tar.xz
           rm crc-macos-amd64.tar.xz
-          cd crc-macos-1.11.0-amd64/
+          cd crc-macos-1.2.0-amd64/
 
           #brew install hyperkit
 
-          ./crc config set memory 9216
-          ./crc config view
-
           ./crc setup
+          
+          ./crc config set memory 8128
+          ./crc config view
 
           #rm $HOME/.crc/bin/hyperkit
           #ln -s /usr/local/bin/hyperkit $HOME/.crc/bin/hyperkit
