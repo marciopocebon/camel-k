@@ -8,13 +8,13 @@ on:
 
 jobs:
   crc:
-    runs-on: macos-latest
+    runs-on: windows-latest
 
     steps:
       - name: Info
         run: |
           df -h
-          sysctl hw.memsize
+          #sysctl hw.memsize
 
       - name: Checkout code
         uses: actions/checkout@v2
