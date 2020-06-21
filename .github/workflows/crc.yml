@@ -33,10 +33,10 @@ jobs:
 
           #brew install hyperkit
 
-          ./crc setup
+          ./crc.exe setup
           
           #./crc config set memory 8192
-          ./crc config view
+          ./crc.exe config view
 
           #rm $HOME/.crc/bin/hyperkit
           #ln -s /usr/local/bin/hyperkit $HOME/.crc/bin/hyperkit
@@ -45,11 +45,12 @@ jobs:
           #sudo pkill hyperkit
 
           echo $PULL_SECRET > pull.secret
-          ./crc start -p pull.secret --log-level debug
-          eval $(crc oc-env)
-          ./crc console --credentials
+          ./crc.exe start -p pull.secret --log-level debug
+          eval $(crc.exe oc-env)
+          ./crc.exe console --credentials
 
-          ./crc stop
+          ./crc.exe stop
+          ./crc.exe delete
 
       - name: Build
         run: |
