@@ -25,16 +25,16 @@ jobs:
         run: |
           /usr/bin/sudo /bin/launchctl disable system/com.apple.NetworkSharing
 
-          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.2.0/crc-macos-amd64.tar.xz -o crc-macos-amd64.tar.xz
-          tar xf crc-macos-amd64.tar.xz
-          rm crc-macos-amd64.tar.xz
-          cd crc-macos-1.2.0-amd64/
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-windows-amd64.tar.xz -o crc-macos-amd64.tar.xz
+          tar xf crc-windows-amd64.tar.xz
+          rm crc-windows-amd64.tar.xz
+          cd crc-windows-1.11.0-amd64/
 
           #brew install hyperkit
 
-          ./crc setup --vm-driver virtualbox
+          ./crc setup
           
-          ./crc config set memory 8192
+          #./crc config set memory 8192
           ./crc config view
 
           #rm $HOME/.crc/bin/hyperkit
@@ -44,7 +44,7 @@ jobs:
           #sudo pkill hyperkit
 
           echo $PULL_SECRET > pull.secret
-          ./crc start -p pull.secret --log-level debug --vm-driver virtualbox
+          ./crc start -p pull.secret --log-level debug
           eval $(crc oc-env)
           ./crc console --credentials
 
