@@ -35,10 +35,10 @@ jobs:
           
           ls .
 
-          crc.exe setup
+          ./crc setup
           
           #./crc config set memory 8192
-          crc.exe config view
+          ./crc config view
 
           #rm $HOME/.crc/bin/hyperkit
           #ln -s /usr/local/bin/hyperkit $HOME/.crc/bin/hyperkit
@@ -47,12 +47,12 @@ jobs:
           #sudo pkill hyperkit
 
           echo $PULL_SECRET > pull.secret
-          crc.exe start -p pull.secret --log-level debug
-          eval $(crc.exe oc-env)
-          crc.exe console --credentials
+          ./crc start -p pull.secret --log-level debug
+          eval $(./crc oc-env)
+          ./crc console --credentials
 
-          crc.exe stop
-          crc.exe delete
+          ./crc stop
+          ./crc delete
 
       - name: Build
         run: |
