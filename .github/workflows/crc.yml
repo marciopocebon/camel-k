@@ -25,9 +25,10 @@ jobs:
         run: |
           /usr/bin/sudo /bin/launchctl disable system/com.apple.NetworkSharing
 
-          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-windows-amd64.tar.xz -o crc-macos-amd64.tar.xz
-          tar xf crc-windows-amd64.tar.xz
-          rm crc-windows-amd64.tar.xz
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-windows-amd64.zip -o crc-macos-amd64.zip
+          #tar xf crc-windows-amd64.tar.xz
+          unzip crc-windows-amd64.zip
+          rm crc-windows-amd64.zip
           cd crc-windows-1.11.0-amd64/
 
           #brew install hyperkit
