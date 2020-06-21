@@ -29,9 +29,12 @@ jobs:
           #tar xf crc-windows-amd64.tar.xz
           unzip crc-windows-amd64.zip
           rm crc-windows-amd64.zip
-          #cd crc-windows-1.11.0-amd64/
+          cd crc-windows-1.11.0-amd64/
 
           #brew install hyperkit
+          
+          dir
+          ls .
 
           crc.exe setup
           
