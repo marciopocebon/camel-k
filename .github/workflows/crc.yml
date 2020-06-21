@@ -33,7 +33,6 @@ jobs:
 
           #brew install hyperkit
           
-          dir
           ls .
 
           crc.exe setup
