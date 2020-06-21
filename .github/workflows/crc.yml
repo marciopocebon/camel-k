@@ -8,13 +8,14 @@ on:
 
 jobs:
   crc:
-    runs-on: windows-latest
+    runs-on: macos-latest
 
     steps:
       - name: Info
         run: |
           df -h
-          #sysctl hw.memsize
+          sysctl hw.memsize
+          sw_vers
 
       - name: Checkout code
         uses: actions/checkout@v2
@@ -23,39 +24,27 @@ jobs:
         env:
           PULL_SECRET: ${{ secrets.PULL_SECRET }}
         run: |
-          #/usr/bin/sudo /bin/launchctl disable system/com.apple.NetworkSharing
-
-          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-windows-amd64.zip -o crc-windows-amd64.zip
-          #tar xf crc-windows-amd64.tar.xz
-          unzip crc-windows-amd64.zip
-          rm crc-windows-amd64.zip
-          cd crc-windows-1.11.0-amd64/
-
-          #brew install hyperkit
-          
-          ls .
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/crc/1.11.0/crc-macos-amd64.tar.xz -o crc-macos-amd64.tar.xz
+          tar xf crc-macos-amd64.tar.xz
+          rm crc-macos-amd64.tar.xz
+          cd crc-macos-1.11.0-amd64/
 
           ./crc setup
-          
+
           #./crc config set memory 8192
           ./crc config view
-
-          #rm $HOME/.crc/bin/hyperkit
-          #ln -s /usr/local/bin/hyperkit $HOME/.crc/bin/hyperkit
-          #(cd $HOME/.crc/bin && sudo chown root:wheel hyperkit && sudo chmod u+s hyperkit && chmod +x hyperkit)
-
-          #sudo pkill hyperkit
 
           echo $PULL_SECRET > pull.secret
           ./crc start -p pull.secret --log-level debug
           eval $(./crc oc-env)
-          ./crc console --credentials
 
           ./crc stop
           ./crc delete
 
       - name: Build
         run: |
+          brew cask install docker
+
           # Compute registry parameters
           echo "Build project"
           make build-kamel
