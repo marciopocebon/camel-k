@@ -23,27 +23,26 @@ import (
 	"strconv"
 	"strings"
 
+	monitoringv1 "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	monitoringv1 "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 
 	"github.com/apache/camel-k/deploy"
 	v1 "github.com/apache/camel-k/pkg/apis/camel/v1"
 	"github.com/apache/camel-k/pkg/util"
 )
 
-// The Prometheus trait configures a Prometheus-compatible endpoint. It also exposes the integration with a `Service`
-// and a `ServiceMonitor` resources, so that the endpoint can be scraped automatically, when using the Prometheus
-// operator.
+// The Prometheus trait configures a Prometheus-compatible endpoint. It also creates a `PodMonitor` resource,
+// so that the endpoint can be scraped automatically, when using the Prometheus operator.
 //
 // The metrics exposed vary depending on the configured runtime. With Quarkus, the metrics are exposed
 // using MicroProfile Metrics. While with the default runtime, they are exposed using the Prometheus JMX exporter.
 //
-// WARNING: The creation of the `ServiceMonitor` resource requires the https://github.com/coreos/prometheus-operator[Prometheus Operator]
+// WARNING: The creation of the `PodMonitor` resource requires the https://github.com/coreos/prometheus-operator[Prometheus Operator]
 // custom resource definition to be installed.
-// You can set `service-monitor` to `false` for the Prometheus trait to work without the Prometheus operator.
+// You can set `pod-monitor` to `false` for the Prometheus trait to work without the Prometheus operator CRDs.
 //
 // It's disabled by default.
 //
@@ -52,10 +51,10 @@ type prometheusTrait struct {
 	BaseTrait `property:",squash"`
 	// The Prometheus endpoint port (default `9779`, or `8080` with Quarkus).
 	Port *int `property:"port"`
-	// Whether a `ServiceMonitor` resource is created (default `true`).
-	ServiceMonitor bool `property:"service-monitor"`
-	// The `ServiceMonitor` resource labels, applicable when `service-monitor` is `true`.
-	ServiceMonitorLabels string `property:"service-monitor-labels"`
+	// Whether a `PodMonitor` resource is created (default `true`).
+	PodMonitor bool `property:"pod-monitor"`
+	// The `PodMonitor` resource labels, applicable when `pod-monitor` is `true`.
+	PodMonitorLabels string `property:"pod-monitor-labels"`
 	// To use a custom ConfigMap containing the Prometheus JMX exporter configuration (under the `content` ConfigMap key).
 	// When this property is left empty (default), Camel K generates a standard Prometheus configuration for the integration.
 	// It is not applicable when using Quarkus.
@@ -65,13 +64,12 @@ type prometheusTrait struct {
 const (
 	prometheusJmxExporterConfigFileName  = "prometheus-jmx-exporter.yaml"
 	prometheusJmxExporterConfigMountPath = "/etc/prometheus"
-	prometheusPortName                   = "prometheus"
 )
 
 func newPrometheusTrait() Trait {
 	return &prometheusTrait{
-		BaseTrait:      NewBaseTrait("prometheus", 1900),
-		ServiceMonitor: true,
+		BaseTrait:  NewBaseTrait("prometheus", 1900),
+		PodMonitor: true,
 	}
 }
 
@@ -154,43 +152,16 @@ func (t *prometheusTrait) Apply(e *Environment) (err error) {
 	}
 	condition.Message = fmt.Sprintf("%s(%d)", container.Name, containerPort.ContainerPort)
 
-	// Retrieve the service or create a new one if the service trait is enabled
-	serviceEnabled := false
-	service := e.Resources.GetServiceForIntegration(e.Integration)
-	if service == nil {
-		trait := e.Catalog.GetTrait(serviceTraitID)
-		if serviceTrait, ok := trait.(*serviceTrait); ok {
-			serviceEnabled = serviceTrait.isEnabled()
+	// Add the PodMonitor resource
+	if t.PodMonitor {
+		podMonitor, err := t.getPodMonitorFor(e)
+		if err != nil {
+			return err
 		}
-		if serviceEnabled {
-			// Add a new service if not already created
-			service = getServiceFor(e)
-			// Override the service name if none exists.
-			// This is required for Knative Serving, that checks no standard eponymous service exist
-			service.Name += "-prometheus"
-			e.Resources.Add(service)
-		}
+		e.Resources.Add(podMonitor)
+		condition.Message = fmt.Sprintf("PodMonitor (%s) -> ", podMonitor.Name) + condition.Message
 	} else {
-		serviceEnabled = true
-	}
-
-	// Add the service port and service monitor resource
-	if serviceEnabled {
-		servicePort := t.getServicePort()
-		service.Spec.Ports = append(service.Spec.Ports, *servicePort)
-		condition.Message = fmt.Sprintf("%s(%s/%d) -> ", service.Name, servicePort.Name, servicePort.Port) + condition.Message
-
-		// Add the ServiceMonitor resource
-		if t.ServiceMonitor {
-			smt, err := t.getServiceMonitorFor(e)
-			if err != nil {
-				return err
-			}
-			e.Resources.Add(smt)
-		}
-	} else {
-		condition.Status = corev1.ConditionFalse
-		condition.Reason = v1.IntegrationConditionServiceNotAvailableReason
+		condition.Message = "ContainerPort " + condition.Message
 	}
 
 	e.Integration.Status.SetConditions(condition)
@@ -206,27 +177,18 @@ func (t *prometheusTrait) getContainerPort() *corev1.ContainerPort {
 	return &containerPort
 }
 
-func (t *prometheusTrait) getServicePort() *corev1.ServicePort {
-	servicePort := corev1.ServicePort{
-		Name:     prometheusPortName,
-		Port:     int32(*t.Port),
-		Protocol: corev1.ProtocolTCP,
-		// Avoid relying on named port, as Knative enforces specific values used for content negotiation
-		TargetPort: intstr.FromInt(*t.Port),
-	}
-	return &servicePort
-}
-
-func (t *prometheusTrait) getServiceMonitorFor(e *Environment) (*monitoringv1.ServiceMonitor, error) {
-	labels, err := parseCsvMap(&t.ServiceMonitorLabels)
+func (t *prometheusTrait) getPodMonitorFor(e *Environment) (*monitoringv1.PodMonitor, error) {
+	labels, err := parseCsvMap(&t.PodMonitorLabels)
 	if err != nil {
 		return nil, err
 	}
 	labels["camel.apache.org/integration"] = e.Integration.Name
 
-	smt := monitoringv1.ServiceMonitor{
+	targetPort := intstr.FromInt(*t.Port)
+
+	podMonitor := monitoringv1.PodMonitor{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceMonitor",
+			Kind:       "PodMonitor",
 			APIVersion: "monitoring.coreos.com/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -234,20 +196,21 @@ func (t *prometheusTrait) getServiceMonitorFor(e *Environment) (*monitoringv1.Se
 			Namespace: e.Integration.Namespace,
 			Labels:    labels,
 		},
-		Spec: monitoringv1.ServiceMonitorSpec{
+		Spec: monitoringv1.PodMonitorSpec{
 			Selector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"camel.apache.org/integration": e.Integration.Name,
 				},
 			},
-			Endpoints: []monitoringv1.Endpoint{
+			PodMetricsEndpoints: []monitoringv1.PodMetricsEndpoint{
 				{
-					Port: prometheusPortName,
+					// Avoid relying on named port, as Knative enforces specific values used for content negotiation
+					TargetPort: &targetPort,
 				},
 			},
 		},
 	}
-	return &smt, nil
+	return &podMonitor, nil
 }
 
 func (t *prometheusTrait) getJmxExporterConfigMapOrAdd(e *Environment) string {
